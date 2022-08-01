@@ -10,13 +10,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-
-
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "btc-transaction",
 	Short: "App to create offline transactions",
-	Long: "Create offline transactions for the Bitcoin network.",
+	Long:  "Create offline transactions for the Bitcoin network.",
 	// Run: func(cmd *cobra.Command, args []string) { },
 }
 
@@ -40,5 +38,3 @@ func init() {
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
-
-
