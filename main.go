@@ -1,10 +1,12 @@
 /*
-Copyright © 2022 NAME HERE <EMAIL ADDRESS>
+Copyright © 2022 NAME HERE k.m.alexandre@protonmail.com
 
 */
 package main
 
-import "github.com/k.m.alexandre/btc-transaction/cmd"
+import (
+	"github.com/alexandre-k/btc-transaction/cmd"
+)
 
 func main() {
 	cmd.Execute()
