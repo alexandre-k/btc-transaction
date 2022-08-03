@@ -5,9 +5,12 @@ Copyright © 2022 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+  "os"
+  "path/filepath"
 	"encoding/json"
 	"fmt"
-	transaction "github.com/alexandre-k/btc-transaction/lib"
+	lib "github.com/alexandre-k/btc-transaction/lib"
+  "github.com/btcsuite/btcutil"
 	"github.com/spf13/cobra"
 	"io/ioutil"
 	"log"
@@ -16,18 +19,19 @@ import (
 )
 
 type InputData struct {
-	PrivateKey  string
 	Destination string
 	Amount      int64
+  Fee         int64
 	LastHash    string
+  Testnet     bool
 }
 
 func getInputOrFlag(input map[string]interface{}, cmd *cobra.Command, field string) string {
 	r := []rune(field)
 	r[0] = unicode.ToUpper(r[0])
 	capitalizedField := string(r)
-	if input[field] == "" {
-		flagInput, _ := cmd.Flags().GetString(field)
+	flagInput, _ := cmd.Flags().GetString(field)
+	if flagInput != "" {
 		return flagInput
 	} else {
 		val := fmt.Sprint(input[capitalizedField])
@@ -57,22 +61,64 @@ var (
 				}
 			}
 
+      // ****** Read private key ******
+      
+
+      // ******* Read input parameters *********
+
 			var inputMap map[string]interface{}
 			data, _ := json.Marshal(input)
 			json.Unmarshal(data, &inputMap)
-			privateKey := getInputOrFlag(inputMap, cmd, "privateKey")
+			testnet, _ := strconv.ParseBool(getInputOrFlag(inputMap, cmd, "testnet"))
 			destination := getInputOrFlag(inputMap, cmd, "destination")
 			amount, _ := strconv.ParseInt(getInputOrFlag(inputMap, cmd, "amount"), 10, 64)
+			fee, _ := strconv.ParseInt(getInputOrFlag(inputMap, cmd, "fee"), 10, 64)
 			lastHash := getInputOrFlag(inputMap, cmd, "lastHash")
 
-			transaction, err := transaction.CreateTransaction(
-				privateKey, destination, amount, lastHash)
+      fmt.Println("\nInput parameters:\n")
+      fmt.Println("\t- Destination: ", destination)
+      fmt.Println("\t- Amount: ", amount)
+      fmt.Println("\t- Fee: ", fee)
+      fmt.Println("\t- Last hash: ", lastHash)
+      fmt.Println("\t- Testnet: ", testnet)
+      if destination == "" || amount == 0 || lastHash == "" || fee == 0 {
+         fmt.Println("Parameter unknown. All parameters are necessary")
+         return nil
+      }
+
+      // *****************
+
+      wallet := lib.CreateWallet(testnet) 
+
+      cwd, _ := os.Getwd()
+
+      var privateKeyFilename = filepath.Join(cwd, "/private.key")
+
+      _, err := os.Stat(privateKeyFilename)
+
+      var privKeyWIF *btcutil.WIF
+
+      if err != nil {
+        privKeyWIF, _ = wallet.CreatePrivateKey()
+        os.WriteFile(privateKeyFilename, []byte(privKeyWIF.String()), 0600)
+      } else {
+        privateKeyFile, _ := os.ReadFile(privateKeyFilename)
+        privKeyWIF, _ = wallet.ImportWIF(string(privateKeyFile))
+      }
+
+      source, _ := wallet.GetAddressPublicKey(privKeyWIF)
+      sourceAddress, _ := wallet.GetDecodedAddress(source.EncodeAddress())
+      destinationAddress, _ := wallet.GetDecodedAddress(destination)
+
+			transaction, err := lib.CreateTransaction(
+				privKeyWIF, source, destinationAddress, amount, fee, lastHash)
 			if err != nil {
-				fmt.Println(err)
+				log.Fatal(err)
 				return err
 			}
 			tx, _ := json.Marshal(transaction)
-			fmt.Println(string(tx))
+      fmt.Println("\nOutput Transaction:\n")
+			fmt.Println("\t", string(tx))
 			return nil
 		},
 	}
@@ -91,6 +137,9 @@ func init() {
 
 	createCmd.PersistentFlags().StringP(
 		"amount", "a", "", "Amount to transfer in transaction")
+
+  createCmd.PersistentFlags().StringP(
+		"fee", "f", "", "Fee to pay for the transaction")
 
 	createCmd.PersistentFlags().StringP(
 		"lastHash", "l", "", "Previous source UTXO hash to build a transaction upon")
