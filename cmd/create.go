@@ -76,7 +76,6 @@ var (
 			lastHash := getInputOrFlag(inputMap, cmd, "lastHash")
 
       fmt.Println("\nInput parameters:\n")
-      fmt.Println("\t- Destination: ", destination)
       fmt.Println("\t- Amount: ", amount)
       fmt.Println("\t- Fee: ", fee)
       fmt.Println("\t- Last hash: ", lastHash)
@@ -110,8 +109,10 @@ var (
       sourceAddress, _ := wallet.GetDecodedAddress(source.EncodeAddress())
       destinationAddress, _ := wallet.GetDecodedAddress(destination)
 
+      fmt.Println("\t- Transaction: ", sourceAddress, " => ", destinationAddress)
+
 			transaction, err := lib.CreateTransaction(
-				privKeyWIF, source, destinationAddress, amount, fee, lastHash)
+				privKeyWIF, sourceAddress, destinationAddress, amount, fee, lastHash)
 			if err != nil {
 				log.Fatal(err)
 				return err
