@@ -63,3 +63,9 @@ func (w *Wallet) GetDecodedAddress (address string) (btcutil.Address, error) {
 	}
   return sourceAddress, nil
 }
+
+func (w *Wallet) GetWitnessPubKeyHash (wif *btcutil.WIF) *btcutil.AddressWitnessPubKeyHash {
+  p2wkhAddr, _ := btcutil.NewAddressWitnessPubKeyHash(
+    btcutil.Hash160(wif.PrivKey.PubKey().SerializeUncompressed()), w.Config)
+  return p2wkhAddr
+}

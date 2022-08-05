@@ -22,6 +22,7 @@ type InputData struct {
 	Destination string
 	Amount      int64
   Fee         int64
+  Vout        uint32
 	LastHash    string
   Testnet     bool
 }
@@ -73,12 +74,14 @@ var (
 			destination := getInputOrFlag(inputMap, cmd, "destination")
 			amount, _ := strconv.ParseInt(getInputOrFlag(inputMap, cmd, "amount"), 10, 64)
 			fee, _ := strconv.ParseInt(getInputOrFlag(inputMap, cmd, "fee"), 10, 64)
+			vout, _ := strconv.ParseInt(getInputOrFlag(inputMap, cmd, "vout"), 10, 64)
 			lastHash := getInputOrFlag(inputMap, cmd, "lastHash")
 
       fmt.Println("\nInput parameters:\n")
       fmt.Println("\t- Amount: ", amount)
       fmt.Println("\t- Fee: ", fee)
       fmt.Println("\t- Last hash: ", lastHash)
+      fmt.Println("\t- Vout: ", vout)
       fmt.Println("\t- Testnet: ", testnet)
       if destination == "" || amount == 0 || lastHash == "" || fee == 0 {
          fmt.Println("Parameter unknown. All parameters are necessary")
@@ -102,24 +105,27 @@ var (
         os.WriteFile(privateKeyFilename, []byte(privKeyWIF.String()), 0600)
       } else {
         privateKeyFile, _ := os.ReadFile(privateKeyFilename)
-        privKeyWIF, _ = wallet.ImportWIF(string(privateKeyFile))
+        privateKeyContent := string(privateKeyFile)
+        privKeyWIF, _ = wallet.ImportWIF(privateKeyContent)
       }
 
       source, _ := wallet.GetAddressPublicKey(privKeyWIF)
+      // witnessPubKey := wallet.GetWitnessPubKeyHash(privKeyWIF)
+      // fmt.Println("Witness ", witnessPubKey)
       sourceAddress, _ := wallet.GetDecodedAddress(source.EncodeAddress())
       destinationAddress, _ := wallet.GetDecodedAddress(destination)
 
       fmt.Println("\t- Transaction: ", sourceAddress, " => ", destinationAddress)
 
 			transaction, err := lib.CreateTransaction(
-				privKeyWIF, sourceAddress, destinationAddress, amount, fee, lastHash)
+				privKeyWIF, sourceAddress, destinationAddress, amount, fee, uint32(vout), lastHash)
 			if err != nil {
 				log.Fatal(err)
 				return err
 			}
-			tx, _ := json.Marshal(transaction)
+			// tx, _ := json.Marshal(transaction)
       fmt.Println("\nOutput Transaction:\n")
-			fmt.Println("\t", string(tx))
+			fmt.Println("\t", transaction)
 			return nil
 		},
 	}
