@@ -1,10 +1,10 @@
 package lib
 
 import (
-//"fmt"
-"errors"
+	//"fmt"
 	"bytes"
 	"encoding/hex"
+	"errors"
 	// "github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
@@ -21,27 +21,27 @@ type Transaction struct {
 }
 
 type UTXO struct {
-     Address btcutil.Address
-     TxId string
-     OutputIndex uint32
-     Script []byte
-     Satoshis int64
+	Address     btcutil.Address
+	TxId        string
+	OutputIndex uint32
+	Script      []byte
+	Satoshis    int64
 }
 
 // debugTx(tx wire.MsgTx) {
-	// sigScriptDisasm, _ := txscript.DisasmString(tx.TxIn[0].SignatureScript)
-	// fmt.Println("sigScript:", tx)
+// sigScriptDisasm, _ := txscript.DisasmString(tx.TxIn[0].SignatureScript)
+// fmt.Println("sigScript:", tx)
 // }
 
 // Pay-To-Public-Key-Hash (P2PKH) transaction type.
 //  <pubkey> OP_CHECKSIG
 func GetPayToAddrScript(address btcutil.Address) []byte {
-  receiveScript, _ := txscript.PayToAddrScript(address)
-  return receiveScript
+	receiveScript, _ := txscript.PayToAddrScript(address)
+	return receiveScript
 }
 
 func isValidSignature(unspentTx UTXO, tx *wire.MsgTx, amount int64) bool {
-  // Validate signature
+	// Validate signature
 	flags := txscript.StandardVerifyFlags
 	vm, err := txscript.NewEngine(unspentTx.Script, tx, 0, flags, nil, nil, amount)
 
@@ -50,54 +50,54 @@ func isValidSignature(unspentTx UTXO, tx *wire.MsgTx, amount int64) bool {
 	}
 
 	if err := vm.Execute(); err != nil {
-     return false
+		return false
 	}
 
-  return true
+	return true
 }
 
 func serializeTx(tx *wire.MsgTx) string {
-  buf := bytes.NewBuffer(make([]byte, 0, tx.SerializeSize()))
-  tx.Serialize(buf)
-  return hex.EncodeToString(buf.Bytes())
+	buf := bytes.NewBuffer(make([]byte, 0, tx.SerializeSize()))
+	tx.Serialize(buf)
+	return hex.EncodeToString(buf.Bytes())
 }
 
 func CreateTransaction(wifKey *btcutil.WIF, src btcutil.Address, dst btcutil.Address, amount int64, fee int64, vout uint32, lastHash string) (string, error) {
 
-  unspentTx := UTXO {
-    Address: src,
-    TxId: lastHash,
-    OutputIndex: vout,
-    Script: GetPayToAddrScript(src),
-    Satoshis: amount,
-  }
+	unspentTx := UTXO{
+		Address:     src,
+		TxId:        lastHash,
+		OutputIndex: vout,
+		Script:      GetPayToAddrScript(src),
+		Satoshis:    amount,
+	}
 
 	tx := wire.NewMsgTx(wire.TxVersion)
 	utxoHash, _ := chainhash.NewHashFromStr(unspentTx.TxId)
 
-  // Add TxIn
+	// Add TxIn
 	tx.AddTxIn(
-    wire.NewTxIn(
-      wire.NewOutPoint(
-        utxoHash,
-        unspentTx.OutputIndex), nil, nil))
+		wire.NewTxIn(
+			wire.NewOutPoint(
+				utxoHash,
+				unspentTx.OutputIndex), nil, nil))
 
-  // Add TxOut
+	// Add TxOut
 	tx.AddTxOut(
-    wire.NewTxOut(amount - fee, GetPayToAddrScript(dst)))
+		wire.NewTxOut(amount-fee, GetPayToAddrScript(dst)))
 
 	signatureScript, err := txscript.SignatureScript(
-    tx, 0, unspentTx.Script, txscript.SigHashAll, wifKey.PrivKey, false)
+		tx, 0, unspentTx.Script, txscript.SigHashAll, wifKey.PrivKey, false)
 	if err != nil {
 		return "", err
 	}
 	tx.TxIn[0].SignatureScript = signatureScript
 
-  // debugTx(tx)
+	// debugTx(tx)
 
-  if isValidSignature(unspentTx, tx, amount) != true {
-    return "", errors.New("Invalid signature")
-  }
+	if isValidSignature(unspentTx, tx, amount) != true {
+		return "", errors.New("Invalid signature")
+	}
 
-  return serializeTx(tx), nil
+	return serializeTx(tx), nil
 }
