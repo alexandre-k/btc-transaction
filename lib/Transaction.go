@@ -1,10 +1,10 @@
 package lib
 
 import (
-	"fmt"
-	"math"
 	"bytes"
 	"encoding/hex"
+	"fmt"
+	"math"
 	// "errors"
 	// "github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -22,24 +22,24 @@ type Transaction struct {
 }
 
 type UtxoStatus struct {
-	Confirmed bool `json:"confirmed"`
-	BlockHeight int64 `json:"block_height"`
-	BlockHash string `json:"block_hash"`
-	BlockTime int64 `json:"block_time"`
+	Confirmed   bool   `json:"confirmed"`
+	BlockHeight int64  `json:"block_height"`
+	BlockHash   string `json:"block_hash"`
+	BlockTime   int64  `json:"block_time"`
 }
 
 type UTXO struct {
-	TxId        string `json:"txid"`
-	Vout uint32 `json:"vout"`
+	TxId   string     `json:"txid"`
+	Vout   uint32     `json:"vout"`
 	Status UtxoStatus `json:"status"`
-	Value int64 `json:"value"`
+	Value  int64      `json:"value"`
 }
 
 func debugTx(tx *wire.MsgTx) {
 	pkScript, _ := txscript.DisasmString(tx.TxOut[0].PkScript)
-  sigScript, _ := txscript.DisasmString(tx.TxIn[0].SignatureScript)
+	sigScript, _ := txscript.DisasmString(tx.TxIn[0].SignatureScript)
 	fmt.Println("\t**** DEBUG ****")
-  fmt.Println("\t - pkScript:", pkScript)
+	fmt.Println("\t - pkScript:", pkScript)
 	fmt.Println("\t - sigScript:", sigScript)
 	fmt.Println("\t***************")
 }
@@ -79,8 +79,8 @@ func CreateTransaction(wifKey *btcutil.WIF, src btcutil.Address, dst btcutil.Add
 		// doubled SHA256-hashed of a (previous) to-be-used transaction
 		utxoHash, _ := chainhash.NewHashFromStr(utxo.TxId)
 		fmt.Println("* Double SHA256-hashed of Previous transaction: ", utxoHash)
-			// Add TxIn
-			tx.AddTxIn(
+		// Add TxIn
+		tx.AddTxIn(
 			wire.NewTxIn(
 				wire.NewOutPoint(
 					utxoHash,
@@ -96,15 +96,14 @@ func CreateTransaction(wifKey *btcutil.WIF, src btcutil.Address, dst btcutil.Add
 	// 2. Remaining for source
 
 	// fee = size in kb * feeRate
-	fee := int64(math.Ceil(float64(tx.SerializeSize() / 1000))) * int64(feeRate)
+	fee := int64(math.Ceil(float64(tx.SerializeSize()/1000))) * int64(feeRate)
 	if fee == 0 {
 		fee = int64(feeRate)
 	}
 
 	subscript := GetPayToAddrScript(src)
 	tx.AddTxOut(
-		wire.NewTxOut(unspentAmount - amount - fee, subscript))
-
+		wire.NewTxOut(unspentAmount-amount-fee, subscript))
 
 	for index, txIn := range tx.TxIn {
 		signatureScript, err := txscript.SignatureScript(
@@ -118,7 +117,6 @@ func CreateTransaction(wifKey *btcutil.WIF, src btcutil.Address, dst btcutil.Add
 	}
 
 	debugTx(tx)
-
 
 	return serializeTx(tx), nil
 }

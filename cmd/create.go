@@ -25,6 +25,8 @@ type InputData struct {
 	Vout        uint32
 	LastHash    string
 	Testnet     bool
+	Utxos       string
+	UtxoFile    string
 }
 
 func getInputOrFlag(input map[string]interface{}, cmd *cobra.Command, field string) string {
@@ -43,6 +45,7 @@ func getInputOrFlag(input map[string]interface{}, cmd *cobra.Command, field stri
 
 // createCmd represents the create command
 var (
+	utxos     []lib.UTXO
 	jsonFile  string
 	createCmd = &cobra.Command{
 		Use:   "create",
@@ -52,13 +55,8 @@ var (
 			var input InputData
 			if jsonFile != "" {
 				content, err := ioutil.ReadFile(jsonFile)
-				if err != nil {
-					log.Fatal("Error while reading the file ", jsonFile, ". ", err)
-				}
-
-				err = json.Unmarshal(content, &input)
-				if err != nil {
-					log.Fatal("Unable to unmarshal: ", err)
+				if err == nil {
+					json.Unmarshal(content, &input)
 				}
 			}
 
@@ -71,16 +69,18 @@ var (
 			destination := getInputOrFlag(inputMap, cmd, "destination")
 			amount, _ := strconv.ParseInt(getInputOrFlag(inputMap, cmd, "amount"), 10, 64)
 			fee, _ := strconv.ParseInt(getInputOrFlag(inputMap, cmd, "fee"), 10, 64)
-			// utxos := getInputOrFlag(inputMap, cmd, "utxo")
+			utxosContent := getInputOrFlag(inputMap, cmd, "utxos")
+			utxoFile := getInputOrFlag(inputMap, cmd, "utxoFile")
 
-			var utxos []lib.UTXO
-			utxosContent, err := ioutil.ReadFile("utxos.json")
-			fmt.Println(err)
-			if err == nil {
-				err = json.Unmarshal(utxosContent, &utxos)
-			}
-			if err != nil {
-				log.Fatal("Unable to unmarshal: ", err)
+			fmt.Println(utxosContent)
+			if utxoFile == "" {
+				json.Unmarshal([]byte(utxosContent), &utxos)
+			} else {
+				utxosContent, err := ioutil.ReadFile("utxos.json")
+				fmt.Println(err)
+				if err == nil {
+					err = json.Unmarshal(utxosContent, &utxos)
+				}
 			}
 
 			fmt.Println("\nInput parameters:\n")
@@ -101,7 +101,7 @@ var (
 
 			var privateKeyFilename = filepath.Join(cwd, "/private.key")
 
-			_, err = os.Stat(privateKeyFilename)
+			_, err := os.Stat(privateKeyFilename)
 
 			var privKeyWIF *btcutil.WIF
 
@@ -115,10 +115,9 @@ var (
 			}
 
 			source, _ := wallet.GetAddressPublicKey(privKeyWIF)
-			fmt.Println("\t- Public key uncompressed: ", source)
-
-			compressedSource, _ := wallet.GetAddressPublicKey(privKeyWIF)
-			fmt.Println("\t- Public key compressed: ", compressedSource)
+			// fmt.Println("\t- Public key uncompressed: ", source)
+			// compressedSource, _ := wallet.GetAddress(privKeyWIF)
+			// fmt.Println("\t- Public key compressed: ", compressedSource)
 			// witnessPubKey := wallet.GetWitnessPubKeyHash(privKeyWIF)
 			// fmt.Println("Witness ", witnessPubKey)
 			sourceAddress, _ := wallet.GetDecodedAddress(source.EncodeAddress())
@@ -132,7 +131,6 @@ var (
 				log.Fatal(err)
 				return err
 			}
-			// tx, _ := json.Marshal(transaction)
 			fmt.Println("\nOutput Transaction:\n")
 			fmt.Println("\t", transaction)
 			return nil
@@ -157,7 +155,8 @@ func init() {
 	createCmd.PersistentFlags().StringP(
 		"fee", "f", "", "Fee to pay for the transaction")
 
-	// var utxos []lib.UTXO
-	// createCmd.Flags().Var(&JSONFlag{&utxos}, "utxo", "Previous source UTXOs to build a transaction upon")
+	createCmd.PersistentFlags().StringP("utxo", "u", "", "Previous source UTXOs to build a transaction upon")
+
+	createCmd.PersistentFlags().StringP("utxoFile", "t", "", "File containing previous source UTXOs to build a transaction upon")
 
 }
