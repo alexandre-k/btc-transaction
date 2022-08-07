@@ -60,3 +60,9 @@ To retrieve an array of currently available unspent transactions, use mempool:
 ```
 curl -X GET https://mempool.space/testnet/api/address/mxEEptDqy8pHvcxr98v6HCkdTUb1xg5tYf/utxo | jq
 ```
+
+## Fetch fees
+
+```
+curl -X GET https://api.blockcypher.com/v1/btc/test3 | jq
+```

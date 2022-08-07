@@ -2,6 +2,7 @@ package lib
 
 import (
 	"fmt"
+	"math"
 	"bytes"
 	"encoding/hex"
 	// "errors"
@@ -54,11 +55,6 @@ func isValidSignature(script []byte, tx *wire.MsgTx, amount int64) error {
 	// Validate signature
 	flags := txscript.StandardVerifyFlags
 	vm, err := txscript.NewEngine(script, tx, 0, flags, nil, nil, amount)
-
-	if err != nil {
-		return err
-	}
-
 	err = vm.Execute()
 	return err
 }
@@ -70,7 +66,7 @@ func serializeTx(tx *wire.MsgTx) string {
 }
 
 // See https://en.bitcoin.it/wiki/Transaction
-func CreateTransaction(wifKey *btcutil.WIF, src btcutil.Address, dst btcutil.Address, amount int64, fee int64, utxos []UTXO) (string, error) {
+func CreateTransaction(wifKey *btcutil.WIF, src btcutil.Address, dst btcutil.Address, amount int64, feeRate int64, utxos []UTXO) (string, error) {
 
 	tx := wire.NewMsgTx(wire.TxVersion)
 
@@ -90,7 +86,6 @@ func CreateTransaction(wifKey *btcutil.WIF, src btcutil.Address, dst btcutil.Add
 					utxoHash,
 					// Previous Txout-index
 					utxo.Vout), nil, nil))
-		fmt.Println(utxo.Value)
 		unspentAmount += utxo.Value
 	}
 
@@ -99,23 +94,27 @@ func CreateTransaction(wifKey *btcutil.WIF, src btcutil.Address, dst btcutil.Add
 	tx.AddTxOut(
 		wire.NewTxOut(amount, GetPayToAddrScript(dst)))
 	// 2. Remaining for source
+
+	// fee = size in kb * feeRate
+	fee := int64(math.Ceil(float64(tx.SerializeSize() / 1000))) * int64(feeRate)
+	if fee == 0 {
+		fee = int64(feeRate)
+	}
+
 	subscript := GetPayToAddrScript(src)
 	tx.AddTxOut(
 		wire.NewTxOut(unspentAmount - amount - fee, subscript))
 
 
-	for index, _ := range tx.TxIn {
+	for index, txIn := range tx.TxIn {
 		signatureScript, err := txscript.SignatureScript(
 			tx, index, subscript, txscript.SigHashAll, wifKey.PrivKey, false)
+
+		txIn.SignatureScript = signatureScript
 		if err != nil {
 			return "", err
 		}
 
-		// if isValidSignature(signatureScript, tx, amount) != nil {
-		// 		return "", errors.New("Invalid signature")
-		// }
-
-		tx.TxIn[index].SignatureScript = signatureScript
 	}
 
 	debugTx(tx)
