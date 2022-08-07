@@ -1,5 +1,5 @@
 /*
-Copyright © 2022 NAME HERE <EMAIL ADDRESS>
+Copyright © 2022 Alexandre Krispin <k.m.alexandre@protonmail.com>
 
 */
 package cmd
@@ -62,8 +62,6 @@ var (
 				}
 			}
 
-			// ****** Read private key ******
-
 			// ******* Read input parameters *********
 
 			var inputMap map[string]interface{}
@@ -73,16 +71,24 @@ var (
 			destination := getInputOrFlag(inputMap, cmd, "destination")
 			amount, _ := strconv.ParseInt(getInputOrFlag(inputMap, cmd, "amount"), 10, 64)
 			fee, _ := strconv.ParseInt(getInputOrFlag(inputMap, cmd, "fee"), 10, 64)
-			vout, _ := strconv.ParseInt(getInputOrFlag(inputMap, cmd, "vout"), 10, 64)
-			lastHash := getInputOrFlag(inputMap, cmd, "lastHash")
+			// utxos := getInputOrFlag(inputMap, cmd, "utxo")
+
+			var utxos []lib.UTXO
+			utxosContent, err := ioutil.ReadFile("utxos.json")
+			fmt.Println(err)
+			if err == nil {
+				err = json.Unmarshal(utxosContent, &utxos)
+			}
+			if err != nil {
+				log.Fatal("Unable to unmarshal: ", err)
+			}
 
 			fmt.Println("\nInput parameters:\n")
 			fmt.Println("\t- Amount: ", amount)
 			fmt.Println("\t- Fee: ", fee)
-			fmt.Println("\t- Last hash: ", lastHash)
-			fmt.Println("\t- Vout: ", vout)
 			fmt.Println("\t- Testnet: ", testnet)
-			if destination == "" || amount == 0 || lastHash == "" || fee == 0 {
+			fmt.Println("\t- UTXOs: ", utxos)
+			if destination == "" || amount == 0 || len(utxos) == 0 || fee == 0 {
 				fmt.Println("Parameter unknown. All parameters are necessary")
 				return nil
 			}
@@ -95,7 +101,7 @@ var (
 
 			var privateKeyFilename = filepath.Join(cwd, "/private.key")
 
-			_, err := os.Stat(privateKeyFilename)
+			_, err = os.Stat(privateKeyFilename)
 
 			var privKeyWIF *btcutil.WIF
 
@@ -109,6 +115,10 @@ var (
 			}
 
 			source, _ := wallet.GetAddressPublicKey(privKeyWIF)
+			fmt.Println("\t- Public key uncompressed: ", source)
+
+			compressedSource, _ := wallet.GetAddressPublicKey(privKeyWIF)
+			fmt.Println("\t- Public key compressed: ", compressedSource)
 			// witnessPubKey := wallet.GetWitnessPubKeyHash(privKeyWIF)
 			// fmt.Println("Witness ", witnessPubKey)
 			sourceAddress, _ := wallet.GetDecodedAddress(source.EncodeAddress())
@@ -117,7 +127,7 @@ var (
 			fmt.Println("\t- Transaction: ", sourceAddress, " => ", destinationAddress)
 
 			transaction, err := lib.CreateTransaction(
-				privKeyWIF, sourceAddress, destinationAddress, amount, fee, uint32(vout), lastHash)
+				privKeyWIF, sourceAddress, destinationAddress, amount, fee, utxos)
 			if err != nil {
 				log.Fatal(err)
 				return err
@@ -147,6 +157,7 @@ func init() {
 	createCmd.PersistentFlags().StringP(
 		"fee", "f", "", "Fee to pay for the transaction")
 
-	createCmd.PersistentFlags().StringP(
-		"lastHash", "l", "", "Previous source UTXO hash to build a transaction upon")
+	// var utxos []lib.UTXO
+	// createCmd.Flags().Var(&JSONFlag{&utxos}, "utxo", "Previous source UTXOs to build a transaction upon")
+
 }

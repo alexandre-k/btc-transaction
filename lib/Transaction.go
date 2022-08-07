@@ -1,10 +1,10 @@
 package lib
 
 import (
-	//"fmt"
+	"fmt"
 	"bytes"
 	"encoding/hex"
-	"errors"
+	// "errors"
 	// "github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
@@ -20,40 +20,47 @@ type Transaction struct {
 	tx                 string `json:"tx"`
 }
 
-type UTXO struct {
-	Address     btcutil.Address
-	TxId        string
-	OutputIndex uint32
-	Script      []byte
-	Satoshis    int64
+type UtxoStatus struct {
+	Confirmed bool `json:"confirmed"`
+	BlockHeight int64 `json:"block_height"`
+	BlockHash string `json:"block_hash"`
+	BlockTime int64 `json:"block_time"`
 }
 
-// debugTx(tx wire.MsgTx) {
-// sigScriptDisasm, _ := txscript.DisasmString(tx.TxIn[0].SignatureScript)
-// fmt.Println("sigScript:", tx)
-// }
+type UTXO struct {
+	TxId        string `json:"txid"`
+	Vout uint32 `json:"vout"`
+	Status UtxoStatus `json:"status"`
+	Value int64 `json:"value"`
+}
+
+func debugTx(tx *wire.MsgTx) {
+	pkScript, _ := txscript.DisasmString(tx.TxOut[0].PkScript)
+  sigScript, _ := txscript.DisasmString(tx.TxIn[0].SignatureScript)
+	fmt.Println("\t**** DEBUG ****")
+  fmt.Println("\t - pkScript:", pkScript)
+	fmt.Println("\t - sigScript:", sigScript)
+	fmt.Println("\t***************")
+}
 
 // Pay-To-Public-Key-Hash (P2PKH) transaction type.
 //  <pubkey> OP_CHECKSIG
 func GetPayToAddrScript(address btcutil.Address) []byte {
-	receiveScript, _ := txscript.PayToAddrScript(address)
-	return receiveScript
+	script, _ := txscript.PayToAddrScript(address)
+	return script
 }
 
-func isValidSignature(unspentTx UTXO, tx *wire.MsgTx, amount int64) bool {
+func isValidSignature(script []byte, tx *wire.MsgTx, amount int64) error {
 	// Validate signature
 	flags := txscript.StandardVerifyFlags
-	vm, err := txscript.NewEngine(unspentTx.Script, tx, 0, flags, nil, nil, amount)
+	vm, err := txscript.NewEngine(script, tx, 0, flags, nil, nil, amount)
 
 	if err != nil {
-		return false
+		return err
 	}
 
-	if err := vm.Execute(); err != nil {
-		return false
-	}
-
-	return true
+	err = vm.Execute()
+	return err
 }
 
 func serializeTx(tx *wire.MsgTx) string {
@@ -62,42 +69,57 @@ func serializeTx(tx *wire.MsgTx) string {
 	return hex.EncodeToString(buf.Bytes())
 }
 
-func CreateTransaction(wifKey *btcutil.WIF, src btcutil.Address, dst btcutil.Address, amount int64, fee int64, vout uint32, lastHash string) (string, error) {
-
-	unspentTx := UTXO{
-		Address:     src,
-		TxId:        lastHash,
-		OutputIndex: vout,
-		Script:      GetPayToAddrScript(src),
-		Satoshis:    amount,
-	}
+// See https://en.bitcoin.it/wiki/Transaction
+func CreateTransaction(wifKey *btcutil.WIF, src btcutil.Address, dst btcutil.Address, amount int64, fee int64, utxos []UTXO) (string, error) {
 
 	tx := wire.NewMsgTx(wire.TxVersion)
-	utxoHash, _ := chainhash.NewHashFromStr(unspentTx.TxId)
 
-	// Add TxIn
-	tx.AddTxIn(
-		wire.NewTxIn(
-			wire.NewOutPoint(
-				utxoHash,
-				unspentTx.OutputIndex), nil, nil))
+	var unspentAmount int64 = 0
+	for _, utxo := range utxos {
+		if unspentAmount > amount {
+			break
+		}
+
+		// doubled SHA256-hashed of a (previous) to-be-used transaction
+		utxoHash, _ := chainhash.NewHashFromStr(utxo.TxId)
+		fmt.Println("* Double SHA256-hashed of Previous transaction: ", utxoHash)
+			// Add TxIn
+			tx.AddTxIn(
+			wire.NewTxIn(
+				wire.NewOutPoint(
+					utxoHash,
+					// Previous Txout-index
+					utxo.Vout), nil, nil))
+		fmt.Println(utxo.Value)
+		unspentAmount += utxo.Value
+	}
 
 	// Add TxOut
+	// 1. Amount for destination
 	tx.AddTxOut(
-		wire.NewTxOut(amount-fee, GetPayToAddrScript(dst)))
+		wire.NewTxOut(amount, GetPayToAddrScript(dst)))
+	// 2. Remaining for source
+	subscript := GetPayToAddrScript(src)
+	tx.AddTxOut(
+		wire.NewTxOut(unspentAmount - amount - fee, subscript))
 
-	signatureScript, err := txscript.SignatureScript(
-		tx, 0, unspentTx.Script, txscript.SigHashAll, wifKey.PrivKey, false)
-	if err != nil {
-		return "", err
+
+	for index, _ := range tx.TxIn {
+		signatureScript, err := txscript.SignatureScript(
+			tx, index, subscript, txscript.SigHashAll, wifKey.PrivKey, false)
+		if err != nil {
+			return "", err
+		}
+
+		// if isValidSignature(signatureScript, tx, amount) != nil {
+		// 		return "", errors.New("Invalid signature")
+		// }
+
+		tx.TxIn[index].SignatureScript = signatureScript
 	}
-	tx.TxIn[0].SignatureScript = signatureScript
 
-	// debugTx(tx)
+	debugTx(tx)
 
-	if isValidSignature(unspentTx, tx, amount) != true {
-		return "", errors.New("Invalid signature")
-	}
 
 	return serializeTx(tx), nil
 }
